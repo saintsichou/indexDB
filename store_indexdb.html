@@ -1,0 +1,128 @@
+<!--
+ * @Date: 2020-04-29 11:43:46
+ * @LastEditors: Lee
+ * @LastEditTime: 2020-05-06 11:29:55
+ -->
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Document</title>
+ </head>
+ <body>
+     <!-- <button class="btn violetBtn" onclick="add()">添加数据</button> -->
+     <button class="btn grayBtn" onclick="read('snap')">读取数据</button>
+ </body>
+ <script>
+     const audioName = [
+        { 'name' : 'reward' },
+        { 'name' : 'snap' },
+        { 'name' : 'success' },
+        { 'name' : 'failed' }//网络获取
+    ];
+
+     //转化为blob
+     var databaseName = 'databaseAudio';
+     var version = '1';
+     //打开indexdb数据库
+     var request = window.indexedDB.open(databaseName, version);
+     console.log('request', request);
+     request.onerror = function (event) {
+             console.log('数据库打开报错');
+     };
+     var db;
+     var mp3Blob;
+     request.onsuccess = function (event) {
+         db = request.result;
+         console.log('数据库打开成功');
+        init()
+     };
+     //数据库版本更新后新建表
+     request.onupgradeneeded = function(event) {
+         db = event.target.result;
+        var objectStore;
+        if (!db.objectStoreNames.contains('audios')) {
+            objectStore = db.createObjectStore('audios', {keyPath: 'name'});
+        }
+        for (let i = 0; i < audioName.length; i++) {
+            const ele = audioName[i];
+            var myRequest = new Request(`${ele.name}.mp3`);
+            fetch(myRequest).then(function(response) {
+                return response.blob();
+            })
+            .then(function(response) {
+                console.log(response)
+                mp3Blob = response
+                var objectURL = URL.createObjectURL(response);
+                console.log(mp3Blob)
+               add(mp3Blob,ele.name);
+            });
+        }
+        
+     };
+    //初始化数据
+    function init() {
+        for(let i = 0; i < audioName.length; i++) {
+            console.log(i)
+            let objectStore = db.transaction('audios').objectStore('audios');
+            let request = objectStore.get(audioName[i].name);
+            console.log(audioName[i].name)
+            request.onsuccess = function() {
+                if(request.result) {
+                    //本地有的话从本地取
+                    displayAudio(request.result.mp3);
+                } else {
+                    // 从网络拉去数据
+                    console.log('获取网络歌曲')
+                }
+            };
+        }
+    }
+     //添加数据
+     function add(mp3Blob,name) {
+         var request = db.transaction(['audios'], 'readwrite')
+             .objectStore('audios')
+         let record = {
+            mp3:mp3Blob,
+            name:name
+        }
+        let mp3s = request.add(record);
+         request.onsuccess = function (event) {
+             console.log('数据写入成功');
+             read();
+         };
+         request.onerror = function (event) {
+             console.log('数据写入失败');
+         }
+     }
+     //获取数据
+     function read(name) {
+         var transaction = db.transaction(['audios']);
+         var objectStore = transaction.objectStore('audios');
+         var request = objectStore.get(name);
+         console.log(objectStore.get('snap'))
+         request.onerror = function(event) {
+                 console.log('事务失败');
+         };
+         request.onsuccess = function( event) {
+                 if (request.result) {
+                 console.log('Name: ' + request.result.name);
+                 console.log('mp3: ' + request.result.mp3);
+                let mp3Blob = request.result.mp3
+                displayAudio(mp3Blob)
+             } else {
+                 console.log('未获得数据记录');
+             }
+         };
+     }
+     //创建播放audio
+     function displayAudio(mp3Blob){
+        let mp3Url = URL.createObjectURL(mp3Blob);
+        let audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = mp3Url;
+        document.body.appendChild(audio)
+     }
+ </script>
+ </html>
